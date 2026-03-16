@@ -1,94 +1,62 @@
-// src/KhazanaManager.js
 import * as FileSystem from "expo-file-system";
 
-export const KHAZANA_ROOT = FileSystem.documentDirectory + "Raju_Khazana/";
-export const SYSTEM_DIR = KHAZANA_ROOT + "System/";
-export const CORE_MEMORY_FILE = SYSTEM_DIR + "Core_Memory.txt";
-export const CHAT_HISTORY_FILE = SYSTEM_DIR + "chat_history.json";
-export const MASTER_INDEX_FILE = SYSTEM_DIR + "Master_Index.txt";
+export const KHAZANA_ROOT = FileSystem.documentDirectory + "Khazana/";
+export const CHAT_FILE = KHAZANA_ROOT + "history.json";
+export const CORE_MEMORY_FILE = KHAZANA_ROOT + "Core_Memory.txt"; // NEW: Eternal Memory
 
 export const initKhazanaSystem = async () => {
-  try {
-    const rootInfo = await FileSystem.getInfoAsync(KHAZANA_ROOT);
-    if (!rootInfo.exists) await FileSystem.makeDirectoryAsync(KHAZANA_ROOT, { intermediates: true });
-    
-    const sysInfo = await FileSystem.getInfoAsync(SYSTEM_DIR);
-    if (!sysInfo.exists) await FileSystem.makeDirectoryAsync(SYSTEM_DIR, { intermediates: true });
-  } catch (error) {
-    console.error("Initialization Error:", error);
+  const info = await FileSystem.getInfoAsync(KHAZANA_ROOT);
+  if (!info.exists) {
+      await FileSystem.makeDirectoryAsync(KHAZANA_ROOT, { intermediates: true });
+  }
+
+  // --- PHASE 2: Initialize Core Memory ---
+  const coreInfo = await FileSystem.getInfoAsync(CORE_MEMORY_FILE);
+  if (!coreInfo.exists) {
+    const defaultProfile = "Admin Name: Raju\nRole: Creator of Sovereign OS\nStatus: Supreme Commander";
+    await FileSystem.writeAsStringAsync(CORE_MEMORY_FILE, defaultProfile);
   }
 };
 
-export const loadCoreMemory = async () => {
-  try {
-    const info = await FileSystem.getInfoAsync(CORE_MEMORY_FILE);
-    if (info.exists) return await FileSystem.readAsStringAsync(CORE_MEMORY_FILE);
-  } catch (error) {
-    console.error("Memory Load Error:", error);
-  }
-  return "No existing core memory records found.";
-};
-
-export const updateCoreMemory = async (newMemoryText) => {
-  try {
-    await FileSystem.writeAsStringAsync(CORE_MEMORY_FILE, newMemoryText);
-    return true;
-  } catch (error) {
-    console.error("Memory Update Error:", error);
-    return false;
-  }
-};
-
-export const saveChatHistory = async (messages) => {
-  try {
-    const safeMessages = messages.map(m => ({ ...m, isNew: false }));
-    await FileSystem.writeAsStringAsync(CHAT_HISTORY_FILE, JSON.stringify(safeMessages));
-  } catch (error) {
-    console.error("Chat Save Error:", error);
-  }
-};
+export const saveChatHistory = async (msgs) => FileSystem.writeAsStringAsync(CHAT_FILE, JSON.stringify(msgs));
 
 export const loadChatHistory = async () => {
-  try {
-    const info = await FileSystem.getInfoAsync(CHAT_HISTORY_FILE);
-    if (info.exists) {
-      const data = await FileSystem.readAsStringAsync(CHAT_HISTORY_FILE);
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error("Chat Load Error:", error);
-  }
-  return null;
+  const info = await FileSystem.getInfoAsync(CHAT_FILE);
+  return info.exists ? JSON.parse(await FileSystem.readAsStringAsync(CHAT_FILE)) : [];
 };
 
-export const clearChatHistory = async () => {
-  try {
-    await FileSystem.deleteAsync(CHAT_HISTORY_FILE, { idempotent: true });
-  } catch (error) {
-    console.error("Chat Clear Error:", error);
-  }
+// ==========================================
+// PHASE 2: ADMIN OS RIGHTS (FILE MANAGEMENT)
+// ==========================================
+
+export const createAdminFile = async (filename, content) => {
+    try {
+        const path = KHAZANA_ROOT + filename;
+        await FileSystem.writeAsStringAsync(path, content);
+        return `[SUCCESS] File '${filename}' successfully created and secured in Khazana Sandbox.`;
+    } catch (error) {
+        return `[ERROR] File creation failed: ${error.message}`;
+    }
 };
 
-export const getKhazanaCatalog = async (path = KHAZANA_ROOT, relativePath = "") => {
-  let catalog = [];
-  try {
-    const items = await FileSystem.readDirectoryAsync(path);
-    for (const item of items) {
-      if (item === "System") continue; 
-      
-      const fullPath = path + item;
-      const info = await FileSystem.getInfoAsync(fullPath);
-      
-      if (info.isDirectory) {
-        catalog.push(relativePath + item + "/ (Directory)");
-        catalog = catalog.concat(await getKhazanaCatalog(fullPath + "/", relativePath + item + "/"));
-      } else if (item.endsWith('.txt') || item.endsWith('.md') || item.endsWith('.json')) {
-        catalog.push(relativePath + item);
-      }
+export const readAdminFile = async (filename) => {
+    try {
+        const path = KHAZANA_ROOT + filename;
+        const info = await FileSystem.getInfoAsync(path);
+        if (!info.exists) return `[ERROR] File '${filename}' does not exist in the Khazana Vault.`;
+        
+        const content = await FileSystem.readAsStringAsync(path);
+        return content;
+    } catch (error) {
+        return `[ERROR] Could not read file: ${error.message}`;
     }
-  } catch (error) {
-    console.error("Catalog Build Error:", error);
-  }
-  return catalog;
 };
-  
+
+export const listAdminFiles = async () => {
+    try {
+        const files = await FileSystem.readDirectoryAsync(KHAZANA_ROOT);
+        return files.length > 0 ? files.join('\n') : "The Khazana directory is currently empty.";
+    } catch (error) {
+        return `[ERROR] Could not list directory contents: ${error.message}`;
+    }
+};
