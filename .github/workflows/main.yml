@@ -21,7 +21,7 @@ jobs:
         run: npm install
 
       - name: Prebuild Android App
-        run: npx expo prebuild --no-interactive --platform android
+        run: npx expo prebuild --platform android
 
       - name: Setup Java
         uses: actions/setup-java@v3
