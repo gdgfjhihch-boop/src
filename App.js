@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, StatusBar, Platform, KeyboardAvoidingView, SafeAreaView, ActivityIndicator, Image } from 'react-native';
 
 // --- CORE MODULE IMPORTS ---
-import { COLORS } from './src/theme';
-import { initKhazanaSystem, loadChatHistory, saveChatHistory } from './src/KhazanaManager';
-import { processUserIntent } from './src/OmniRouter';
-import { executeSafeMath, performWebSearch, fetchAndStripHTML } from './src/Toolbox';
-import { callCloudAPI } from './src/ApiConnector';
-import { executeSwarmTask } from './src/SwarmAgents';
-import { captureAndProcessImage } from './src/VisionCore';
-import { speakResponse, silenceSystem } from './src/VoiceCore';
+import { COLORS } from './theme';
+import { initKhazanaSystem, loadChatHistory, saveChatHistory } from './KhazanaManager';
+import { processUserIntent } from './OmniRouter';
+import { executeSafeMath, performWebSearch, fetchAndStripHTML } from './Toolbox';
+import { callCloudAPI } from './ApiConnector';
+import { executeSwarmTask } from './SwarmAgents';
+import { captureAndProcessImage } from './VisionCore';
+import { speakResponse, silenceSystem } from './VoiceCore';
+
 
 export default function App() {
   const [messages, setMessages] = useState([]);
