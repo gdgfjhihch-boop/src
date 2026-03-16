@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, StatusBar, Platform, KeyboardAvoidingView, SafeAreaView, ActivityIndicator, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, StatusBar, Platform, KeyboardAvoidingView, SafeAreaView, ActivityIndicator, Image, Alert } from 'react-native';
+import * as Clipboard from 'expo-clipboard'; // NEW: Clipboard Manager
 
 // --- CORE MODULE IMPORTS ---
 import { COLORS } from './theme';
@@ -11,6 +12,23 @@ import { executeSwarmTask } from './SwarmAgents';
 import { captureAndProcessImage } from './VisionCore';
 import { speakResponse, silenceSystem } from './VoiceCore';
 
+// --- TYPEWRITER COMPONENT (NEW) ---
+const TypewriterText = ({ text, delay = 15 }) => {
+  const [displayedText, setDisplayedText] = useState('');
+
+  useEffect(() => {
+    let index = 0;
+    setDisplayedText('');
+    const interval = setInterval(() => {
+      setDisplayedText((prev) => prev + text.charAt(index));
+      index++;
+      if (index >= text.length) clearInterval(interval);
+    }, delay);
+    return () => clearInterval(interval);
+  }, [text]);
+
+  return <Text style={styles.msgText}>{displayedText}</Text>;
+};
 
 export default function App() {
   const [messages, setMessages] = useState([]);
@@ -26,14 +44,19 @@ export default function App() {
 
   useEffect(() => {
     const bootSystem = async () => {
-      await initKhazanaSystem();
-      const history = await loadChatHistory();
-      if (history && history.length > 0) {
-        setMessages(history);
-      } else {
-        setMessages([{ id: "sys_boot", role: "ai", text: "Sovereign OS V10 Online. Vision and Voice modules fully activated.", terminalLogs: "[SYSTEM] Boot complete. Awaiting multi-modal input.", isNew: true }]);
+      try {
+        await initKhazanaSystem();
+        const history = await loadChatHistory();
+        if (history && history.length > 0) {
+          setMessages(history);
+        } else {
+          setMessages([{ id: "sys_boot", role: "ai", text: "Sovereign OS V11 Online. Shield protocol active. Typewriter UI enabled.", terminalLogs: "[SYSTEM] Boot complete. Safeguards loaded.", isNew: true }]);
+        }
+        setIsSystemReady(true);
+      } catch (error) {
+        Alert.alert("System Fault", "Core memory failed to load. Operating in safe mode.");
+        setIsSystemReady(true);
       }
-      setIsSystemReady(true);
     };
     bootSystem();
   }, []);
@@ -46,33 +69,31 @@ export default function App() {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, terminalLogs: m.terminalLogs ? m.terminalLogs + "\n" + logText : logText } : m));
   };
 
-  // --- VISION: HANDLE CAMERA ---
-  const handleCamera = async () => {
-    const imageResult = await captureAndProcessImage(true);
-    if (imageResult.success) {
-      setAttachedImage(imageResult);
-    }
+  // --- NEW: COPY TO CLIPBOARD ---
+  const copyToClipboard = async (text) => {
+    await Clipboard.setStringAsync(text);
+    Alert.alert("Copied", "Data secured to clipboard.");
   };
 
-  // --- VOICE: TOGGLE MUTE ---
+  const handleCamera = async () => {
+    const imageResult = await captureAndProcessImage(true);
+    if (imageResult.success) setAttachedImage(imageResult);
+  };
+
   const toggleAudio = async () => {
     if (isSpeaking) {
       await silenceSystem();
       setIsSpeaking(false);
-    } else {
-      setIsSpeaking(true);
-    }
+    } else setIsSpeaking(true);
   };
 
-  // --- CORE SYSTEM: SEND MESSAGE ---
   const handleSend = async () => {
     if (!inputText.trim() && !attachedImage) return;
     
     const userText = inputText.trim() || "Analyze this image.";
     const userMsgId = Date.now().toString();
     
-    const newMsg = { id: userMsgId, role: "user", text: userText, imageUri: attachedImage?.uri, isNew: false };
-    setMessages(prev => [...prev.map(m => ({...m, isNew: false})), newMsg]);
+    setMessages(prev => [...prev.map(m => ({...m, isNew: false})), { id: userMsgId, role: "user", text: userText, imageUri: attachedImage?.uri, isNew: false }]);
     
     setInputText("");
     const currentImg = attachedImage;
@@ -82,6 +103,7 @@ export default function App() {
     const aiMsgId = (Date.now() + 1).toString();
     setMessages(prev => [...prev, { id: aiMsgId, role: "ai", text: "Processing neural request...", terminalLogs: "[SYSTEM] Analyzing input...", isNew: true }]);
 
+    // --- NEW: THE SHIELD (Robust Error Handling) ---
     try {
       const safeApiCaller = async (conn, sys, prmpt) => {
           if (conn.key === "YOUR_GEMINI_API_KEY_HERE") return '{"action":"chat", "query":"Mock Mode Active."}';
@@ -91,8 +113,8 @@ export default function App() {
       let finalResponse = "";
 
       if (currentImg) {
-        appendTerminalLog(aiMsgId, "[VISION] Image attached. Forwarding to visual neural net...");
-        finalResponse = activeConn.key === "YOUR_GEMINI_API_KEY_HERE" ? "Vision Module requires active API key." : "I have received the image. (Note: API connector update required for full visual analysis).";
+        appendTerminalLog(aiMsgId, "[VISION] Forwarding to visual net...");
+        finalResponse = activeConn.key === "YOUR_GEMINI_API_KEY_HERE" ? "Vision requires active API key." : "Image received. API linkage pending.";
       } else {
         const intent = await processUserIntent(userText, safeApiCaller, activeConn);
         appendTerminalLog(aiMsgId, `[ROUTER] Intent mapped: ${intent.action.toUpperCase()}`);
@@ -107,19 +129,17 @@ export default function App() {
           case "swarm":
             finalResponse = (await executeSwarmTask(intent.query, tavilyKey, activeConn, callCloudAPI, (log) => appendTerminalLog(aiMsgId, log))).message; break;
           default:
-            finalResponse = activeConn.key === "YOUR_GEMINI_API_KEY_HERE" ? "Offline Mode: Enter API keys in App.js to go online." : await callCloudAPI(activeConn, "You are Sovereign OS. Be highly intelligent and professional.", userText);
+            finalResponse = activeConn.key === "YOUR_GEMINI_API_KEY_HERE" ? "Offline Mode: Enter API keys to go online." : await callCloudAPI(activeConn, "You are Sovereign OS. Be highly intelligent and concise.", userText);
         }
       }
 
       setMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: finalResponse, isNew: true } : m));
-      
-      if (isSpeaking) {
-          speakResponse(finalResponse);
-      }
+      if (isSpeaking) speakResponse(finalResponse);
 
     } catch (error) {
-      appendTerminalLog(aiMsgId, `[ERROR] ${error.message}`);
-      setMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: "System operation failed." } : m));
+      appendTerminalLog(aiMsgId, `[SHIELD_WARNING] ${error.message}`);
+      // SHIELD PROTECTION: Graceful degradation instead of crash
+      setMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: "Boss, I encountered a network anomaly. Shield protocol active. Please check connection or retry.", isNew: true } : m));
     }
     setIsProcessing(false);
   };
@@ -146,11 +166,23 @@ export default function App() {
                 {msg.terminalLogs && <View style={styles.termBox}><Text style={styles.termText}>{msg.terminalLogs}</Text></View>}
                 {msg.imageUri && <Image source={{uri: msg.imageUri}} style={styles.chatImage} />}
                 
-                <Text style={styles.msgText}>{msg.text}</Text>
+                {/* NEW: TYPEWRITER & COPY BUTTON */}
+                {msg.role === "ai" && msg.isNew ? (
+                  <TypewriterText text={msg.text} />
+                ) : (
+                  <Text style={styles.msgText}>{msg.text}</Text>
+                )}
+
+                {msg.role === "ai" && (
+                  <TouchableOpacity style={styles.copyBtn} onPress={() => copyToClipboard(msg.text)}>
+                    <Text style={styles.copyText}>[ COPY ]</Text>
+                  </TouchableOpacity>
+                )}
+
               </View>
             </View>
           ))}
-          {isProcessing && <ActivityIndicator color={COLORS.primary} />}
+          {isProcessing && <ActivityIndicator color={COLORS.primary} style={{alignSelf: 'flex-start', margin: 10}} />}
         </ScrollView>
 
         {attachedImage && (
@@ -165,7 +197,7 @@ export default function App() {
             <TouchableOpacity style={styles.camBtn} onPress={handleCamera}>
                 <Text style={styles.camIcon}>📷</Text>
             </TouchableOpacity>
-            <TextInput style={styles.input} placeholder="Command sequence..." placeholderTextColor={COLORS.textMuted} value={inputText} onChangeText={setInputText} multiline />
+            <TextInput style={styles.input} placeholder="Enter command..." placeholderTextColor={COLORS.textMuted} value={inputText} onChangeText={setInputText} multiline />
             <TouchableOpacity style={styles.sendBtn} onPress={handleSend} disabled={isProcessing}>
                 <Text style={styles.sendIcon}>➤</Text>
             </TouchableOpacity>
@@ -180,7 +212,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0D1117' },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0D1117' },
   header: { padding: 15, backgroundColor: '#1F2937', flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: '#374151' },
-  headerTitle: { color: '#10B981', fontSize: 18, fontWeight: 'bold' },
+  headerTitle: { color: '#10B981', fontSize: 18, fontWeight: 'bold', letterSpacing: 1 },
   headerIcon: { fontSize: 22 },
   screenContainer: { flex: 1 },
   chatArea: { padding: 15 },
@@ -188,20 +220,22 @@ const styles = StyleSheet.create({
   msgUser: { justifyContent: 'flex-end' },
   msgAI: { justifyContent: 'flex-start', width: '100%' },
   bubble: { maxWidth: '85%', padding: 14, borderRadius: 12 },
-  bubbleUser: { backgroundColor: '#1F2937', borderWidth: 1, borderColor: '#374151' },
-  bubbleAI: { backgroundColor: 'transparent' },
+  bubbleUser: { backgroundColor: '#1F2937', borderWidth: 1, borderColor: '#374151', borderBottomRightRadius: 2 },
+  bubbleAI: { backgroundColor: 'transparent', paddingLeft: 0 },
   msgText: { color: '#F9FAFB', fontSize: 15, lineHeight: 22 },
   chatImage: { width: 200, height: 200, borderRadius: 8, marginBottom: 10 },
   termBox: { backgroundColor: '#000', padding: 10, borderRadius: 6, marginBottom: 8, borderWidth: 1, borderColor: '#374151' },
   termText: { color: '#00FF00', fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+  copyBtn: { marginTop: 8, alignSelf: 'flex-start' },
+  copyText: { color: '#10B981', fontSize: 11, fontWeight: 'bold' },
   attachmentBar: { flexDirection: 'row', justifyContent: 'space-between', padding: 10, backgroundColor: '#111827', borderTopWidth: 1, borderColor: '#374151' },
   attachmentText: { color: '#10B981', fontSize: 12 },
   removeText: { color: '#EF4444', fontWeight: 'bold', paddingHorizontal: 10 },
-  inputContainer: { flexDirection: 'row', padding: 12, backgroundColor: '#1F2937', alignItems: 'flex-end' },
+  inputContainer: { flexDirection: 'row', padding: 12, backgroundColor: '#1F2937', alignItems: 'flex-end', borderTopWidth: 1, borderColor: '#374151' },
   camBtn: { width: 45, height: 45, justifyContent: 'center', alignItems: 'center', marginRight: 5 },
-  camIcon: { fontSize: 24 },
+  camIcon: { fontSize: 20 },
   input: { flex: 1, backgroundColor: '#111827', color: '#FFF', borderRadius: 8, padding: 12, marginRight: 10, borderWidth: 1, borderColor: '#374151', minHeight: 45, maxHeight: 100 },
   sendBtn: { width: 45, height: 45, borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#10B981' },
   sendIcon: { color: '#000', fontWeight: 'bold', fontSize: 18 }
 });
-              
+      
