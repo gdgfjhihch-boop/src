@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, StatusBar, Platform, KeyboardAvoidingView, SafeAreaView, ActivityIndicator, Image, Alert } from 'react-native';
-import * as Clipboard from 'expo-clipboard'; // NEW: Clipboard Manager
+import * as Clipboard from 'expo-clipboard';
 
-// --- CORE MODULE IMPORTS ---
+// --- CORE MODULE IMPORTS (Path Fixed for Mobile GitHub) ---
 import { COLORS } from './theme';
 import { initKhazanaSystem, loadChatHistory, saveChatHistory } from './KhazanaManager';
 import { processUserIntent } from './OmniRouter';
@@ -11,8 +11,9 @@ import { callCloudAPI } from './ApiConnector';
 import { executeSwarmTask } from './SwarmAgents';
 import { captureAndProcessImage } from './VisionCore';
 import { speakResponse, silenceSystem } from './VoiceCore';
+import { triggerVoiceInput } from './EarCore'; // NEW: Mic Module
 
-// --- TYPEWRITER COMPONENT (NEW) ---
+// --- TYPEWRITER COMPONENT ---
 const TypewriterText = ({ text, delay = 15 }) => {
   const [displayedText, setDisplayedText] = useState('');
 
@@ -36,6 +37,7 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSystemReady, setIsSystemReady] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [attachedImage, setAttachedImage] = useState(null);
   const scrollRef = useRef(null);
 
@@ -50,7 +52,7 @@ export default function App() {
         if (history && history.length > 0) {
           setMessages(history);
         } else {
-          setMessages([{ id: "sys_boot", role: "ai", text: "Sovereign OS V11 Online. Shield protocol active. Typewriter UI enabled.", terminalLogs: "[SYSTEM] Boot complete. Safeguards loaded.", isNew: true }]);
+          setMessages([{ id: "sys_boot", role: "ai", text: "Sovereign OS V12 Online. Shield protocol & Voice modules active.", terminalLogs: "[SYSTEM] Phase 1 Boot complete. All systems nominal.", isNew: true }]);
         }
         setIsSystemReady(true);
       } catch (error) {
@@ -69,7 +71,6 @@ export default function App() {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, terminalLogs: m.terminalLogs ? m.terminalLogs + "\n" + logText : logText } : m));
   };
 
-  // --- NEW: COPY TO CLIPBOARD ---
   const copyToClipboard = async (text) => {
     await Clipboard.setStringAsync(text);
     Alert.alert("Copied", "Data secured to clipboard.");
@@ -78,6 +79,16 @@ export default function App() {
   const handleCamera = async () => {
     const imageResult = await captureAndProcessImage(true);
     if (imageResult.success) setAttachedImage(imageResult);
+  };
+
+  // --- NEW: MIC HANDLER ---
+  const handleMic = async () => {
+    setIsListening(true);
+    const success = await triggerVoiceInput();
+    if (success) {
+      Alert.alert("Voice Mode", "Native STT bridge opened. Please use the mic icon on your keyboard to dictate commands.");
+    }
+    setIsListening(false);
   };
 
   const toggleAudio = async () => {
@@ -103,7 +114,6 @@ export default function App() {
     const aiMsgId = (Date.now() + 1).toString();
     setMessages(prev => [...prev, { id: aiMsgId, role: "ai", text: "Processing neural request...", terminalLogs: "[SYSTEM] Analyzing input...", isNew: true }]);
 
-    // --- NEW: THE SHIELD (Robust Error Handling) ---
     try {
       const safeApiCaller = async (conn, sys, prmpt) => {
           if (conn.key === "YOUR_GEMINI_API_KEY_HERE") return '{"action":"chat", "query":"Mock Mode Active."}';
@@ -138,7 +148,6 @@ export default function App() {
 
     } catch (error) {
       appendTerminalLog(aiMsgId, `[SHIELD_WARNING] ${error.message}`);
-      // SHIELD PROTECTION: Graceful degradation instead of crash
       setMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: "Boss, I encountered a network anomaly. Shield protocol active. Please check connection or retry.", isNew: true } : m));
     }
     setIsProcessing(false);
@@ -166,7 +175,6 @@ export default function App() {
                 {msg.terminalLogs && <View style={styles.termBox}><Text style={styles.termText}>{msg.terminalLogs}</Text></View>}
                 {msg.imageUri && <Image source={{uri: msg.imageUri}} style={styles.chatImage} />}
                 
-                {/* NEW: TYPEWRITER & COPY BUTTON */}
                 {msg.role === "ai" && msg.isNew ? (
                   <TypewriterText text={msg.text} />
                 ) : (
@@ -194,10 +202,15 @@ export default function App() {
 
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <View style={styles.inputContainer}>
-            <TouchableOpacity style={styles.camBtn} onPress={handleCamera}>
-                <Text style={styles.camIcon}>📷</Text>
+            <TouchableOpacity style={styles.iconBtn} onPress={handleCamera}>
+                <Text style={styles.iconText}>📷</Text>
             </TouchableOpacity>
-            <TextInput style={styles.input} placeholder="Enter command..." placeholderTextColor={COLORS.textMuted} value={inputText} onChangeText={setInputText} multiline />
+            <TouchableOpacity style={styles.iconBtn} onPress={handleMic}>
+                <Text style={styles.iconText}>{isListening ? "🔴" : "🎙️"}</Text>
+            </TouchableOpacity>
+            
+            <TextInput style={styles.input} placeholder="Command..." placeholderTextColor={COLORS.textMuted} value={inputText} onChangeText={setInputText} multiline />
+            
             <TouchableOpacity style={styles.sendBtn} onPress={handleSend} disabled={isProcessing}>
                 <Text style={styles.sendIcon}>➤</Text>
             </TouchableOpacity>
@@ -232,10 +245,10 @@ const styles = StyleSheet.create({
   attachmentText: { color: '#10B981', fontSize: 12 },
   removeText: { color: '#EF4444', fontWeight: 'bold', paddingHorizontal: 10 },
   inputContainer: { flexDirection: 'row', padding: 12, backgroundColor: '#1F2937', alignItems: 'flex-end', borderTopWidth: 1, borderColor: '#374151' },
-  camBtn: { width: 45, height: 45, justifyContent: 'center', alignItems: 'center', marginRight: 5 },
-  camIcon: { fontSize: 20 },
-  input: { flex: 1, backgroundColor: '#111827', color: '#FFF', borderRadius: 8, padding: 12, marginRight: 10, borderWidth: 1, borderColor: '#374151', minHeight: 45, maxHeight: 100 },
+  iconBtn: { width: 35, height: 45, justifyContent: 'center', alignItems: 'center', marginRight: 5 },
+  iconText: { fontSize: 20 },
+  input: { flex: 1, backgroundColor: '#111827', color: '#FFF', borderRadius: 8, padding: 10, marginRight: 10, borderWidth: 1, borderColor: '#374151', minHeight: 45, maxHeight: 100 },
   sendBtn: { width: 45, height: 45, borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#10B981' },
   sendIcon: { color: '#000', fontWeight: 'bold', fontSize: 18 }
 });
-      
+            
