@@ -3,11 +3,17 @@
     "name": "Sovereign OS",
     "slug": "sovereign-os",
     "version": "1.0.0",
-    "android": {
-      "package": "com.rajuai.sovereign"
-    },
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
     "splash": {
       "backgroundColor": "#0D1117"
+    },
+    "android": {
+      "package": "com.rajuai.sovereign",
+      "backgroundColor": "#0D1117",
+      "adaptiveIcon": {
+        "backgroundColor": "#10B981"
+      }
     }
   }
 }
